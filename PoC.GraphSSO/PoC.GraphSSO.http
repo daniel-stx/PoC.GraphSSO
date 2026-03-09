@@ -1,0 +1,6 @@
+@PoC.GraphSSO_HostAddress = http://localhost:5150
+
+GET {{PoC.GraphSSO_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
