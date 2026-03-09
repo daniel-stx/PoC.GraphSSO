@@ -1,0 +1,81 @@
+{
+  "info": {
+    "_postman_id": "8e990b10-5228-4f55-8c8a-7d33b847f17c",
+    "name": "PoC.GraphSSO EmployeeId",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Minimal Postman collection for the Graph-only employeeId PoC."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://localhost:5001",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "user@contoso.com",
+      "type": "string"
+    },
+    {
+      "key": "employeeId",
+      "value": "EMP-12345",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Get employeeId",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/users/{{userId}}/employee-id",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "users",
+            "{{userId}}",
+            "employee-id"
+          ]
+        },
+        "description": "Reads the current employeeId for the selected Entra user."
+      },
+      "response": []
+    },
+    {
+      "name": "Update employeeId",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"employeeId\": \"{{employeeId}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/users/{{userId}}/employee-id",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "users",
+            "{{userId}}",
+            "employee-id"
+          ]
+        },
+        "description": "Updates the employeeId for the selected Entra user and returns the duration in milliseconds."
+      },
+      "response": []
+    }
+  ]
+}

@@ -1,12 +1,31 @@
+using System.Diagnostics;
+using Azure.Identity;
+using Microsoft.Extensions.Options;
+using Microsoft.Graph;
+using PoC.GraphSSO.Options;
+using PoC.GraphSSO.Services;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+builder.Services.AddOptions<GraphApiOptions>()
+    .Bind(builder.Configuration.GetSection(GraphApiOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddScoped(sp =>
+{
+    var options = sp.GetRequiredService<IOptions<GraphApiOptions>>().Value;
+    var credential = new ClientSecretCredential(options.TenantId, options.ClientId, options.ClientSecret);
+
+    // App-only tokens keep employeeId updates independent from the signed-in user's Graph privileges.
+    return new GraphServiceClient(credential, ["https://graph.microsoft.com/.default"]);
+});
+builder.Services.AddScoped<IEmployeeDirectoryService, GraphEmployeeDirectoryService>();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -14,28 +33,68 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
+app.MapGet("/", () => Results.Ok(new
     {
-        var forecast = Enumerable.Range(1, 5).Select(index =>
-                new WeatherForecast
-                (
-                    DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-                    Random.Shared.Next(-20, 55),
-                    summaries[Random.Shared.Next(summaries.Length)]
-                ))
-            .ToArray();
-        return forecast;
-    })
-    .WithName("GetWeatherForecast");
+        Message = "Graph-only PoC for reading and updating employeeId.",
+        Endpoints = new[]
+        {
+            "GET /users/{userId}/employee-id",
+            "POST /users/{userId}/employee-id"
+        }
+    }))
+    .WithName("Home");
+
+app.MapGet("/users/{userId}/employee-id",
+        async (string userId, IEmployeeDirectoryService employeeDirectoryService, CancellationToken cancellationToken) =>
+        {
+            var stopwatch = Stopwatch.StartNew();
+            var result = await employeeDirectoryService.GetEmployeeIdAsync(userId, cancellationToken);
+            stopwatch.Stop();
+
+            return result.Status switch
+            {
+                EmployeeIdQueryStatus.Success => Results.Ok(new
+                {
+                    userId = result.UserId,
+                    userPrincipalName = result.UserPrincipalName,
+                    employeeId = result.EmployeeId,
+                    durationMs = stopwatch.ElapsedMilliseconds
+                }),
+                EmployeeIdQueryStatus.UserNotFound => Results.NotFound(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
+                EmployeeIdQueryStatus.InvalidRequest => Results.BadRequest(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
+                _ => Results.Problem(statusCode: StatusCodes.Status502BadGateway, detail: result.Message)
+            };
+        })
+    .WithName("GetEmployeeId");
+
+app.MapPost("/users/{userId}/employee-id",
+        async (string userId, UpdateEmployeeIdRequest request, IEmployeeDirectoryService employeeDirectoryService,
+            CancellationToken cancellationToken) =>
+        {
+            var stopwatch = Stopwatch.StartNew();
+            var result = await employeeDirectoryService.UpdateEmployeeIdAsync(userId, request.EmployeeId, cancellationToken);
+            stopwatch.Stop();
+
+            return result.Status switch
+            {
+                EmployeeIdUpdateStatus.Success => Results.Ok(new
+                {
+                    userId = result.UserId,
+                    userPrincipalName = result.UserPrincipalName,
+                    employeeId = result.EmployeeId,
+                    durationMs = stopwatch.ElapsedMilliseconds
+                }),
+                EmployeeIdUpdateStatus.UserNotFound => Results.NotFound(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
+                EmployeeIdUpdateStatus.CloudManagedRequired => Results.Conflict(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
+                EmployeeIdUpdateStatus.PermissionDenied => Results.Json(
+                    new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds },
+                    statusCode: StatusCodes.Status403Forbidden),
+                EmployeeIdUpdateStatus.InvalidRequest => Results.BadRequest(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
+                _ => Results.Problem(statusCode: StatusCodes.Status502BadGateway, detail: result.Message)
+            };
+        })
+    .WithName("UpdateEmployeeId");
 
 app.Run();
 
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
+internal sealed record UpdateEmployeeIdRequest(string EmployeeId);

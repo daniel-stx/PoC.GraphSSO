@@ -10,10 +10,11 @@
 using System;
 using System.Reflection;
 
+[assembly: Microsoft.Extensions.Configuration.UserSecrets.UserSecretsIdAttribute("cfa52149-3520-463e-9892-9ce303cea6b4")]
 [assembly: System.Reflection.AssemblyCompanyAttribute("PoC.GraphSSO")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+9040765f043a3353d5d24632615ba7332212ef2b")]
 [assembly: System.Reflection.AssemblyProductAttribute("PoC.GraphSSO")]
 [assembly: System.Reflection.AssemblyTitleAttribute("PoC.GraphSSO")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

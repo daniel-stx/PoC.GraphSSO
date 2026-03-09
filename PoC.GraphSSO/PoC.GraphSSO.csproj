@@ -4,10 +4,13 @@
         <TargetFramework>net10.0</TargetFramework>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
+        <UserSecretsId>cfa52149-3520-463e-9892-9ce303cea6b4</UserSecretsId>
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.1"/>
+        <PackageReference Include="Azure.Identity" Version="1.18.0" />
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.1" />
+        <PackageReference Include="Microsoft.Graph" Version="5.103.0" />
     </ItemGroup>
 
 </Project>
