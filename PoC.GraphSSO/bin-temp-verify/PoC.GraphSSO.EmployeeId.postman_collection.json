@@ -1,0 +1,181 @@
+{
+  "info": {
+    "_postman_id": "8e990b10-5228-4f55-8c8a-7d33b847f17c",
+    "name": "PoC.GraphSSO Graph PoCs",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Postman collection for the user creation and employeeId update proof-of-concepts."
+  },
+  "item": [
+    {
+      "name": "User Creation PoC",
+      "item": [
+        {
+          "name": "Create local user",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"Test User\",\n  \"mailNickname\": \"testuser\",\n  \"userPrincipalName\": \"testuser@memberportalhotelrez.onmicrosoft.com\",\n  \"password\": \"P@ssw0rd12345!\",\n  \"accountEnabled\": true,\n  \"forceChangePasswordNextSignIn\": true,\n  \"employeeId\": \"EMP-12345\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:5150/poc/user-creation/users",
+              "host": [
+                "http://localhost:5150"
+              ],
+              "path": [
+                "poc",
+                "user-creation",
+                "users"
+              ]
+            },
+            "description": "Creates a tenant-local cloud user and optionally sets employeeId during creation."
+          },
+          "response": []
+        },
+        {
+          "name": "Invite guest user",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invitedUserEmailAddress\": \"btzutnpfyhnvnwmezm@fxavaj.com\",\n  \"inviteRedirectUrl\": \"https://myapp.contoso.com\",\n  \"sendInvitationMessage\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:5150/poc/user-creation/invitations",
+              "host": [
+                "http://localhost:5150"
+              ],
+              "path": [
+                "poc",
+                "user-creation",
+                "invitations"
+              ]
+            },
+            "description": "Creates a guest invitation for an external user. Entra will generate the #EXT# guest identity."
+          },
+          "response": []
+        },
+        {
+          "name": "Reinvite guest user",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invitedUserId\": \"00000000-0000-0000-0000-000000000000\",\n  \"invitedUserEmailAddress\": \"btzutnpfyhnvnwmezm@fxavaj.com\",\n  \"inviteRedirectUrl\": \"https://myapp.contoso.com\",\n  \"sendInvitationMessage\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:5150/poc/user-creation/invitations/reinvite",
+              "host": [
+                "http://localhost:5150"
+              ],
+              "path": [
+                "poc",
+                "user-creation",
+                "invitations",
+                "reinvite"
+              ]
+            },
+            "description": "Triggers a new Graph reinvitation flow for an already-created guest user by using resetRedemption."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "EmployeeId PoC",
+      "item": [
+        {
+          "name": "Get employeeId",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:5150/poc/employee-id/users/eade8792-0001-4450-8324-8837933ba150/employee-id",
+              "host": [
+                "http://localhost:5150"
+              ],
+              "path": [
+                "poc",
+                "employee-id",
+                "users",
+                "eade8792-0001-4450-8324-8837933ba150",
+                "employee-id"
+              ]
+            },
+            "description": "Reads the current employeeId for the selected Entra user."
+          },
+          "response": []
+        },
+        {
+          "name": "Update employeeId",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employeeId\": \"EMP-12345\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:5150/poc/employee-id/users/eade8792-0001-4450-8324-8837933ba150/employee-id",
+              "host": [
+                "http://localhost:5150"
+              ],
+              "path": [
+                "poc",
+                "employee-id",
+                "users",
+                "eade8792-0001-4450-8324-8837933ba150",
+                "employee-id"
+              ]
+            },
+            "description": "Updates the employeeId for the selected Entra user and returns the duration in milliseconds."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

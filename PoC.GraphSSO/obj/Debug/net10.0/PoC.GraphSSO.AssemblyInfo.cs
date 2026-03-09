@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("PoC.GraphSSO")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+9040765f043a3353d5d24632615ba7332212ef2b")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a432846e7abe46e48d13a4078038a5914c6b8bca")]
 [assembly: System.Reflection.AssemblyProductAttribute("PoC.GraphSSO")]
 [assembly: System.Reflection.AssemblyTitleAttribute("PoC.GraphSSO")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
