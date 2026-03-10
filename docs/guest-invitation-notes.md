@@ -2,7 +2,7 @@
 
 Creation of user is quite easy - for internal users - we use create for external we use invite 
 
-To not send the email we set flag   "sendInvitationMessage": true - buit we need to set up job that would use reinvite with existing invited user id
+To not send the email we set flag   "sendInvitationMessage": false - but we need to set up a job that would use reinvite with the existing invited user id
 
  "inviteRedirectUrl": "https://myapp.contoso.com", - this should be our redirect - to login page (the only issue here would be the skins...)
 
