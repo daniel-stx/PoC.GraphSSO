@@ -1,8 +1,20 @@
-// Creator comment
+## PoC Creator comment (human-made)
 
-It is almost instant, so we can assume it is like repository (MVP), but the best scenario it would be to create additional fallback mechanism - after immediate verification we either return - verified and success or success and required signalR  
+The change is almost instant, so we can assume it is like a repository (but only for MVP).
 
-# EmployeeId Update Propagation Notes
+In the best case scenario, we would need to create a complex solution that would probably be an overkill even for a "serious non-MVP project"
+
+There would be 2 checks that represent two possible paths:
+
+# First
+We fetch a fresh user immediately after the update is complete. Thanks to that, we can verify if the user data has changed. If the data is correct, we can return that the simple action was successful. 
+
+#Second
+If the data were not correct (old), we pick the second asynchronous path. This is the moment when we need to periodicaly watch if the change was propagated and when done use SignalR to notify the user that the change was made. 
+
+# Recommendation - stick to the MVP solution for now
+
+# EmployeeId Update Propagation Notes (AI-Generated)
 
 ## What We Know
 
