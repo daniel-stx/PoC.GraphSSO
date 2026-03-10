@@ -1,14 +1,16 @@
-//Creator note 
+## PoC Creator comment (human-made)
 
-Creation of user is quite easy - for internal users - we use create for external we use invite 
+Creation of a user is quite easy - for internal users, we use the Graph function "Create", and for external users, we use "Invite" 
 
-To not send the email we set flag   "sendInvitationMessage": false - but we need to set up a job that would use reinvite with the existing invited user id
+To not send the email, we set the flag _"sendInvitationMessage": false _ but we need to set up a job that would use reinvite with the existing invited user id.
 
- "inviteRedirectUrl": "https://myapp.contoso.com", - this should be our redirect - to login page (the only issue here would be the skins...) 
+No function lets you send an invitation later; the only way to handle it is to use reinvite with invitedUserId from the invitation. The best option would be to setup the user, and add a scheduled task that reinvites the users using data stored in our db. 
 
- Internal user that creates invitation needs to know where the user should be put in. (Elegant hotels and so on) - then we can set different invite redirect url 
+To properly redirect the user, we need: _"inviteRedirectUrl": "https://myapp.contoso.com"_ - we redirect the user to the login page - but here is the issue with skins:
 
-# Guest Invitation Notes
+ Internal user that creates the invitation needs to know where the user should be put in (Elegant hotels and so on) - then we can set a different invite redirect URL - as we don't want  to redirect our user to wrong login page without the "skin"
+
+# Guest Invitation Notes (AI-Generated)
 
 ## What This PoC Covers
 
