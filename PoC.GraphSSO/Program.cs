@@ -77,7 +77,8 @@ userCreationPoc.MapPost("/users",
                     request.Password,
                     request.AccountEnabled,
                     request.ForceChangePasswordNextSignIn,
-                    request.EmployeeId),
+                    request.EmployeeId,
+                    request.SynXisUsername),
                 cancellationToken);
             stopwatch.Stop();
 
@@ -89,6 +90,7 @@ userCreationPoc.MapPost("/users",
                     userPrincipalName = result.UserPrincipalName,
                     displayName = result.DisplayName,
                     employeeId = result.EmployeeId,
+                    synXisUsername = result.SynXisUsername,
                     accountEnabled = result.AccountEnabled,
                     durationMs = stopwatch.ElapsedMilliseconds
                 }),
@@ -244,7 +246,8 @@ internal sealed record CreateUserApiRequest(
     string Password,
     bool AccountEnabled = true,
     bool ForceChangePasswordNextSignIn = true,
-    string? EmployeeId = null);
+    string? EmployeeId = null,
+    string? SynXisUsername = null);
 
 internal sealed record CreateGuestInvitationApiRequest(
     string InvitedUserEmailAddress,

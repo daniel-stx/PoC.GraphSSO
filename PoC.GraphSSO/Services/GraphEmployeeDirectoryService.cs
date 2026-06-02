@@ -34,8 +34,15 @@ public sealed class GraphEmployeeDirectoryService(
             return UserCreateResult.InvalidRequest("password is required.");
         }
 
+        if (request.SynXisUsername is not null && string.IsNullOrWhiteSpace(request.SynXisUsername))
+        {
+            return UserCreateResult.InvalidRequest("synXisUsername cannot be empty.");
+        }
+
         try
         {
+            var trimmedSynXisUsername = request.SynXisUsername?.Trim();
+
             var createdUser = await graphServiceClient.Users.PostAsync(new User
             {
                 AccountEnabled = request.AccountEnabled,
@@ -43,6 +50,12 @@ public sealed class GraphEmployeeDirectoryService(
                 MailNickname = request.MailNickname.Trim(),
                 UserPrincipalName = request.UserPrincipalName.Trim(),
                 EmployeeId = string.IsNullOrWhiteSpace(request.EmployeeId) ? null : request.EmployeeId.Trim(),
+                AdditionalData = trimmedSynXisUsername is null
+                    ? null
+                    : new Dictionary<string, object>
+                    {
+                        [SynXisUsernameExtensionPropertyName] = trimmedSynXisUsername
+                    },
                 PasswordProfile = new PasswordProfile
                 {
                     Password = request.Password,
@@ -62,6 +75,7 @@ public sealed class GraphEmployeeDirectoryService(
                 createdUser.UserPrincipalName,
                 createdUser.DisplayName,
                 createdUser.EmployeeId,
+                trimmedSynXisUsername,
                 createdUser.AccountEnabled);
         }
         catch (ApiException exception) when (exception.ResponseStatusCode == 400)
@@ -391,7 +405,8 @@ public sealed record CreateUserRequest(
     string Password,
     bool AccountEnabled = true,
     bool ForceChangePasswordNextSignIn = true,
-    string? EmployeeId = null);
+    string? EmployeeId = null,
+    string? SynXisUsername = null);
 
 public sealed record GuestInvitationRequest(
     string InvitedUserEmailAddress,
@@ -420,6 +435,7 @@ public sealed record UserCreateResult(
     string? UserPrincipalName,
     string? DisplayName,
     string? EmployeeId,
+    string? SynXisUsername,
     bool? AccountEnabled)
 {
     public static UserCreateResult Success(
@@ -427,20 +443,21 @@ public sealed record UserCreateResult(
         string? userPrincipalName,
         string? displayName,
         string? employeeId,
+        string? synXisUsername,
         bool? accountEnabled) =>
-        new(UserCreateStatus.Success, string.Empty, userId, userPrincipalName, displayName, employeeId, accountEnabled);
+        new(UserCreateStatus.Success, string.Empty, userId, userPrincipalName, displayName, employeeId, synXisUsername, accountEnabled);
 
     public static UserCreateResult PermissionDenied(string message) =>
-        new(UserCreateStatus.PermissionDenied, message, null, null, null, null, null);
+        new(UserCreateStatus.PermissionDenied, message, null, null, null, null, null, null);
 
     public static UserCreateResult InvalidRequest(string message) =>
-        new(UserCreateStatus.InvalidRequest, message, null, null, null, null, null);
+        new(UserCreateStatus.InvalidRequest, message, null, null, null, null, null, null);
 
     public static UserCreateResult Conflict(string message) =>
-        new(UserCreateStatus.Conflict, message, null, null, null, null, null);
+        new(UserCreateStatus.Conflict, message, null, null, null, null, null, null);
 
     public static UserCreateResult UnexpectedFailure(string message) =>
-        new(UserCreateStatus.UnexpectedFailure, message, null, null, null, null, null);
+        new(UserCreateStatus.UnexpectedFailure, message, null, null, null, null, null, null);
 }
 
 public enum GuestInvitationStatus

@@ -3,7 +3,7 @@
     "_postman_id": "8e990b10-5228-4f55-8c8a-7d33b847f17c",
     "name": "PoC.GraphSSO Graph PoCs",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Postman collection for the user creation and employeeId update proof-of-concepts."
+    "description": "Postman collection for the user creation and user properties proof-of-concepts."
   },
   "item": [
     {
@@ -21,7 +21,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"displayName\": \"Test User\",\n  \"mailNickname\": \"testuser\",\n  \"userPrincipalName\": \"testuser@memberportalhotelrez.onmicrosoft.com\",\n  \"password\": \"P@ssw0rd12345!\",\n  \"accountEnabled\": true,\n  \"forceChangePasswordNextSignIn\": true,\n  \"employeeId\": \"EMP-12345\"\n}",
+              "raw": "{\n  \"displayName\": \"Test User\",\n  \"mailNickname\": \"testuser\",\n  \"userPrincipalName\": \"testuser@memberportalhotelrez.onmicrosoft.com\",\n  \"password\": \"P@ssw0rd12345!\",\n  \"accountEnabled\": true,\n  \"forceChangePasswordNextSignIn\": true,\n  \"employeeId\": \"EMP-12345\",\n  \"synXisUsername\": \"synxis-user\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -39,7 +39,7 @@
                 "users"
               ]
             },
-            "description": "Creates a tenant-local cloud user and optionally sets employeeId during creation."
+            "description": "Creates a tenant-local cloud user and optionally sets employeeId and SynXisUsername during creation."
           },
           "response": []
         },
