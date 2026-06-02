@@ -115,32 +115,31 @@
       ]
     },
     {
-      "name": "EmployeeId PoC",
+      "name": "User Properties PoC",
       "item": [
         {
-          "name": "Get employeeId",
+          "name": "Get user properties",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "http://localhost:5150/poc/employee-id/users/eade8792-0001-4450-8324-8837933ba150/employee-id",
+              "raw": "http://localhost:5150/poc/user-properties/users/eade8792-0001-4450-8324-8837933ba150",
               "host": [
                 "http://localhost:5150"
               ],
               "path": [
                 "poc",
-                "employee-id",
+                "user-properties",
                 "users",
-                "eade8792-0001-4450-8324-8837933ba150",
-                "employee-id"
+                "eade8792-0001-4450-8324-8837933ba150"
               ]
             },
-            "description": "Reads the current employeeId for the selected Entra user."
+            "description": "Reads employeeId and SynXisUsername for the selected Entra user."
           },
           "response": []
         },
         {
-          "name": "Update employeeId",
+          "name": "Update user properties",
           "request": {
             "method": "POST",
             "header": [
@@ -151,7 +150,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"employeeId\": \"EMP-12345\"\n}",
+              "raw": "{\n  \"employeeId\": \"EMP-12345\",\n  \"synXisUsername\": \"synxis-user\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -159,19 +158,18 @@
               }
             },
             "url": {
-              "raw": "http://localhost:5150/poc/employee-id/users/eade8792-0001-4450-8324-8837933ba150/employee-id",
+              "raw": "http://localhost:5150/poc/user-properties/users/eade8792-0001-4450-8324-8837933ba150",
               "host": [
                 "http://localhost:5150"
               ],
               "path": [
                 "poc",
-                "employee-id",
+                "user-properties",
                 "users",
-                "eade8792-0001-4450-8324-8837933ba150",
-                "employee-id"
+                "eade8792-0001-4450-8324-8837933ba150"
               ]
             },
-            "description": "Updates the employeeId for the selected Entra user and returns the duration in milliseconds."
+            "description": "Updates employeeId and/or SynXisUsername for the selected Entra user and returns the duration in milliseconds."
           },
           "response": []
         }

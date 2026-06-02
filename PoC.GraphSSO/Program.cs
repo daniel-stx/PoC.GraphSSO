@@ -40,7 +40,7 @@ app.UseHttpsRedirection();
 #region Route Groups
 
 var userCreationPoc = app.MapGroup("/poc/user-creation");
-var employeeIdPoc = app.MapGroup("/poc/employee-id");
+var userPropertiesPoc = app.MapGroup("/poc/user-properties");
 
 #endregion
 
@@ -48,14 +48,14 @@ var employeeIdPoc = app.MapGroup("/poc/employee-id");
 
 app.MapGet("/", () => Results.Ok(new
     {
-        Message = "Graph-only PoCs for user creation and employeeId update.",
+        Message = "Graph-only PoCs for user creation and user properties update.",
         Endpoints = new[]
         {
             "POST /poc/user-creation/users",
             "POST /poc/user-creation/invitations",
             "POST /poc/user-creation/invitations/reinvite",
-            "GET /poc/employee-id/users/{userId}/employee-id",
-            "POST /poc/employee-id/users/{userId}/employee-id"
+            "GET /poc/user-properties/users/{userId}",
+            "POST /poc/user-properties/users/{userId}"
         }
     }))
     .WithName("Home");
@@ -175,58 +175,63 @@ userCreationPoc.MapPost("/invitations/reinvite",
 
 #endregion
 
-#region EmployeeId PoC
+#region User Properties PoC
 
-employeeIdPoc.MapGet("/users/{userId}/employee-id",
+userPropertiesPoc.MapGet("/users/{userId}",
         async (string userId, IEmployeeDirectoryService employeeDirectoryService, CancellationToken cancellationToken) =>
         {
             var stopwatch = Stopwatch.StartNew();
-            var result = await employeeDirectoryService.GetEmployeeIdAsync(userId, cancellationToken);
+            var result = await employeeDirectoryService.GetUserPropertiesAsync(userId, cancellationToken);
             stopwatch.Stop();
 
             return result.Status switch
             {
-                EmployeeIdQueryStatus.Success => Results.Ok(new
+                UserPropertiesQueryStatus.Success => Results.Ok(new
                 {
                     userId = result.UserId,
                     userPrincipalName = result.UserPrincipalName,
                     employeeId = result.EmployeeId,
+                    synXisUsername = result.SynXisUsername,
                     durationMs = stopwatch.ElapsedMilliseconds
                 }),
-                EmployeeIdQueryStatus.UserNotFound => Results.NotFound(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
-                EmployeeIdQueryStatus.InvalidRequest => Results.BadRequest(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
+                UserPropertiesQueryStatus.UserNotFound => Results.NotFound(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
+                UserPropertiesQueryStatus.InvalidRequest => Results.BadRequest(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
                 _ => Results.Problem(statusCode: StatusCodes.Status502BadGateway, detail: result.Message)
             };
         })
-    .WithName("GetEmployeeId");
+    .WithName("GetUserProperties");
 
-employeeIdPoc.MapPost("/users/{userId}/employee-id",
-        async (string userId, UpdateEmployeeIdRequest request, IEmployeeDirectoryService employeeDirectoryService,
+userPropertiesPoc.MapPost("/users/{userId}",
+        async (string userId, UpdateUserPropertiesApiRequest request, IEmployeeDirectoryService employeeDirectoryService,
             CancellationToken cancellationToken) =>
         {
             var stopwatch = Stopwatch.StartNew();
-            var result = await employeeDirectoryService.UpdateEmployeeIdAsync(userId, request.EmployeeId, cancellationToken);
+            var result = await employeeDirectoryService.UpdateUserPropertiesAsync(
+                userId,
+                new UserPropertiesUpdateRequest(request.EmployeeId, request.SynXisUsername),
+                cancellationToken);
             stopwatch.Stop();
 
             return result.Status switch
             {
-                EmployeeIdUpdateStatus.Success => Results.Ok(new
+                UserPropertiesUpdateStatus.Success => Results.Ok(new
                 {
                     userId = result.UserId,
                     userPrincipalName = result.UserPrincipalName,
                     employeeId = result.EmployeeId,
+                    synXisUsername = result.SynXisUsername,
                     durationMs = stopwatch.ElapsedMilliseconds
                 }),
-                EmployeeIdUpdateStatus.UserNotFound => Results.NotFound(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
-                EmployeeIdUpdateStatus.CloudManagedRequired => Results.Conflict(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
-                EmployeeIdUpdateStatus.PermissionDenied => Results.Json(
+                UserPropertiesUpdateStatus.UserNotFound => Results.NotFound(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
+                UserPropertiesUpdateStatus.CloudManagedRequired => Results.Conflict(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
+                UserPropertiesUpdateStatus.PermissionDenied => Results.Json(
                     new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds },
                     statusCode: StatusCodes.Status403Forbidden),
-                EmployeeIdUpdateStatus.InvalidRequest => Results.BadRequest(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
+                UserPropertiesUpdateStatus.InvalidRequest => Results.BadRequest(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
                 _ => Results.Problem(statusCode: StatusCodes.Status502BadGateway, detail: result.Message)
             };
         })
-    .WithName("UpdateEmployeeId");
+    .WithName("UpdateUserProperties");
 
 #endregion
 
@@ -252,4 +257,4 @@ internal sealed record ReinviteGuestApiRequest(
     string InviteRedirectUrl,
     bool SendInvitationMessage = true);
 
-internal sealed record UpdateEmployeeIdRequest(string EmployeeId);
+internal sealed record UpdateUserPropertiesApiRequest(string? EmployeeId, string? SynXisUsername);
