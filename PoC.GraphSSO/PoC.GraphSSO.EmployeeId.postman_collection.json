@@ -199,6 +199,28 @@
             "description": "Adds the selected Entra user object id to the configured SynXis SSO group."
           },
           "response": []
+        },
+        {
+          "name": "Disable SynXis SSO for user",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:5150/poc/synxis/users/eade8792-0001-4450-8324-8837933ba150/disable-sso",
+              "host": [
+                "http://localhost:5150"
+              ],
+              "path": [
+                "poc",
+                "synxis",
+                "users",
+                "eade8792-0001-4450-8324-8837933ba150",
+                "disable-sso"
+              ]
+            },
+            "description": "Removes the selected Entra user object id from the configured SynXis SSO group."
+          },
+          "response": []
         }
       ]
     }

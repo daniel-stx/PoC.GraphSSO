@@ -27,5 +27,7 @@ public interface IEmployeeDirectoryService
 
     Task<GroupMembershipResult> AddUserToGroupAsync(string groupId, string userId, CancellationToken cancellationToken);
 
+    Task<GroupMembershipResult> RemoveUserFromGroupAsync(string groupId, string userId, CancellationToken cancellationToken);
+
     #endregion
 }

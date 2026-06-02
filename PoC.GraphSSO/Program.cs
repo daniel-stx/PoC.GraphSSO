@@ -60,7 +60,8 @@ app.MapGet("/", () => Results.Ok(new
             "POST /poc/user-creation/invitations/reinvite",
             "GET /poc/user-properties/users/{userId}",
             "POST /poc/user-properties/users/{userId}",
-            "POST /poc/synxis/users/{userId}/enable-sso"
+            "POST /poc/synxis/users/{userId}/enable-sso",
+            "POST /poc/synxis/users/{userId}/disable-sso"
         }
     }))
     .WithName("Home");
@@ -280,6 +281,43 @@ synXisPoc.MapPost("/users/{userId}/enable-sso",
             };
         })
     .WithName("EnableSynXisSso");
+
+synXisPoc.MapPost("/users/{userId}/disable-sso",
+        async (string userId, IOptions<SynXisOptions> synXisOptions, IEmployeeDirectoryService employeeDirectoryService,
+            CancellationToken cancellationToken) =>
+        {
+            var stopwatch = Stopwatch.StartNew();
+            var result = await employeeDirectoryService.RemoveUserFromGroupAsync(
+                synXisOptions.Value.SsoGroupId,
+                userId,
+                cancellationToken);
+            stopwatch.Stop();
+
+            return result.Status switch
+            {
+                GroupMembershipStatus.Success => Results.Ok(new
+                {
+                    status = "Removed",
+                    groupId = result.GroupId,
+                    userId = result.UserId,
+                    durationMs = stopwatch.ElapsedMilliseconds
+                }),
+                GroupMembershipStatus.NotMember => Results.Ok(new
+                {
+                    status = "NotMember",
+                    groupId = result.GroupId,
+                    userId = result.UserId,
+                    durationMs = stopwatch.ElapsedMilliseconds
+                }),
+                GroupMembershipStatus.NotFound => Results.NotFound(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
+                GroupMembershipStatus.PermissionDenied => Results.Json(
+                    new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds },
+                    statusCode: StatusCodes.Status403Forbidden),
+                GroupMembershipStatus.InvalidRequest => Results.BadRequest(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
+                _ => Results.Problem(statusCode: StatusCodes.Status502BadGateway, detail: result.Message)
+            };
+        })
+    .WithName("DisableSynXisSso");
 
 #endregion
 

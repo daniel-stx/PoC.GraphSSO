@@ -455,6 +455,62 @@ public sealed class GraphEmployeeDirectoryService(
         }
     }
 
+    public async Task<GroupMembershipResult> RemoveUserFromGroupAsync(
+        string groupId,
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(groupId))
+        {
+            return GroupMembershipResult.InvalidRequest("SynXis SSO group id is not configured.");
+        }
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return GroupMembershipResult.InvalidRequest("A target user object id is required.");
+        }
+
+        var trimmedGroupId = groupId.Trim();
+        var trimmedUserId = userId.Trim();
+
+        try
+        {
+            await graphServiceClient.Groups[trimmedGroupId].Members[trimmedUserId].Ref.DeleteAsync(
+                cancellationToken: cancellationToken);
+
+            logger.LogInformation("Removed user {UserId} from group {GroupId}.", trimmedUserId, trimmedGroupId);
+
+            return GroupMembershipResult.Success(trimmedGroupId, trimmedUserId);
+        }
+        catch (ApiException exception) when (exception.ResponseStatusCode == 404)
+        {
+            logger.LogInformation(
+                exception,
+                "User {UserId} was not a member of group {GroupId}, or the membership reference was not found.",
+                trimmedUserId,
+                trimmedGroupId);
+
+            return GroupMembershipResult.NotMember(trimmedGroupId, trimmedUserId);
+        }
+        catch (ApiException exception) when (exception.ResponseStatusCode == 400)
+        {
+            logger.LogWarning(exception, "Microsoft Graph rejected group membership removal for user {UserId} and group {GroupId}.", trimmedUserId, trimmedGroupId);
+            return GroupMembershipResult.InvalidRequest(
+                "Microsoft Graph rejected the group membership removal. Verify that groupId and userId are valid object ids.");
+        }
+        catch (ApiException exception) when (exception.ResponseStatusCode == 403)
+        {
+            logger.LogWarning(exception, "Microsoft Graph denied group membership removal for user {UserId} and group {GroupId}.", trimmedUserId, trimmedGroupId);
+            return GroupMembershipResult.PermissionDenied(
+                "Microsoft Graph denied the group membership removal. Verify admin consent and GroupMember.ReadWrite.All application permission.");
+        }
+        catch (ApiException exception)
+        {
+            logger.LogError(exception, "Unexpected Microsoft Graph error while removing user {UserId} from group {GroupId}.", trimmedUserId, trimmedGroupId);
+            return GroupMembershipResult.UnexpectedFailure("Microsoft Graph returned an unexpected error while removing the user from the group.");
+        }
+    }
+
     private static bool IsAlreadyMemberError(ApiException exception) =>
         exception.Message.Contains("already exist", StringComparison.OrdinalIgnoreCase)
         || exception.Message.Contains("already a member", StringComparison.OrdinalIgnoreCase);
@@ -663,6 +719,7 @@ public enum GroupMembershipStatus
 {
     Success,
     AlreadyMember,
+    NotMember,
     NotFound,
     PermissionDenied,
     InvalidRequest,
@@ -680,6 +737,9 @@ public sealed record GroupMembershipResult(
 
     public static GroupMembershipResult AlreadyMember(string groupId, string userId) =>
         new(GroupMembershipStatus.AlreadyMember, string.Empty, groupId, userId);
+
+    public static GroupMembershipResult NotMember(string groupId, string userId) =>
+        new(GroupMembershipStatus.NotMember, string.Empty, groupId, userId);
 
     public static GroupMembershipResult NotFound(string message) =>
         new(GroupMembershipStatus.NotFound, message, null, null);
