@@ -394,6 +394,72 @@ public sealed class GraphEmployeeDirectoryService(
             : null;
 
     #endregion
+
+    #region Group Membership PoC
+
+    public async Task<GroupMembershipResult> AddUserToGroupAsync(
+        string groupId,
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(groupId))
+        {
+            return GroupMembershipResult.InvalidRequest("SynXis SSO group id is not configured.");
+        }
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return GroupMembershipResult.InvalidRequest("A target user object id is required.");
+        }
+
+        var trimmedGroupId = groupId.Trim();
+        var trimmedUserId = userId.Trim();
+
+        try
+        {
+            await graphServiceClient.Groups[trimmedGroupId].Members.Ref.PostAsync(new ReferenceCreate
+            {
+                OdataId = $"https://graph.microsoft.com/v1.0/directoryObjects/{trimmedUserId}"
+            }, cancellationToken: cancellationToken);
+
+            logger.LogInformation("Added user {UserId} to group {GroupId}.", trimmedUserId, trimmedGroupId);
+
+            return GroupMembershipResult.Success(trimmedGroupId, trimmedUserId);
+        }
+        catch (ApiException exception) when (exception.ResponseStatusCode == 400 && IsAlreadyMemberError(exception))
+        {
+            logger.LogInformation("User {UserId} is already a member of group {GroupId}.", trimmedUserId, trimmedGroupId);
+            return GroupMembershipResult.AlreadyMember(trimmedGroupId, trimmedUserId);
+        }
+        catch (ApiException exception) when (exception.ResponseStatusCode == 400)
+        {
+            logger.LogWarning(exception, "Microsoft Graph rejected group membership request for user {UserId} and group {GroupId}.", trimmedUserId, trimmedGroupId);
+            return GroupMembershipResult.InvalidRequest(
+                "Microsoft Graph rejected the group membership request. Verify that groupId and userId are valid object ids.");
+        }
+        catch (ApiException exception) when (exception.ResponseStatusCode == 403)
+        {
+            logger.LogWarning(exception, "Microsoft Graph denied group membership request for user {UserId} and group {GroupId}.", trimmedUserId, trimmedGroupId);
+            return GroupMembershipResult.PermissionDenied(
+                "Microsoft Graph denied the group membership request. Verify admin consent and GroupMember.ReadWrite.All application permission.");
+        }
+        catch (ApiException exception) when (exception.ResponseStatusCode == 404)
+        {
+            logger.LogWarning(exception, "Microsoft Graph could not find user {UserId} or group {GroupId}.", trimmedUserId, trimmedGroupId);
+            return GroupMembershipResult.NotFound("Microsoft Graph could not find the target user or SynXis SSO group.");
+        }
+        catch (ApiException exception)
+        {
+            logger.LogError(exception, "Unexpected Microsoft Graph error while adding user {UserId} to group {GroupId}.", trimmedUserId, trimmedGroupId);
+            return GroupMembershipResult.UnexpectedFailure("Microsoft Graph returned an unexpected error while adding the user to the group.");
+        }
+    }
+
+    private static bool IsAlreadyMemberError(ApiException exception) =>
+        exception.Message.Contains("already exist", StringComparison.OrdinalIgnoreCase)
+        || exception.Message.Contains("already a member", StringComparison.OrdinalIgnoreCase);
+
+    #endregion
 }
 
 #region User Creation PoC Models
@@ -587,6 +653,45 @@ public sealed record UserPropertiesUpdateResult(
 
     public static UserPropertiesUpdateResult UnexpectedFailure(string message) =>
         new(UserPropertiesUpdateStatus.UnexpectedFailure, message, null, null, null, null);
+}
+
+#endregion
+
+#region Group Membership PoC Models
+
+public enum GroupMembershipStatus
+{
+    Success,
+    AlreadyMember,
+    NotFound,
+    PermissionDenied,
+    InvalidRequest,
+    UnexpectedFailure
+}
+
+public sealed record GroupMembershipResult(
+    GroupMembershipStatus Status,
+    string Message,
+    string? GroupId,
+    string? UserId)
+{
+    public static GroupMembershipResult Success(string groupId, string userId) =>
+        new(GroupMembershipStatus.Success, string.Empty, groupId, userId);
+
+    public static GroupMembershipResult AlreadyMember(string groupId, string userId) =>
+        new(GroupMembershipStatus.AlreadyMember, string.Empty, groupId, userId);
+
+    public static GroupMembershipResult NotFound(string message) =>
+        new(GroupMembershipStatus.NotFound, message, null, null);
+
+    public static GroupMembershipResult PermissionDenied(string message) =>
+        new(GroupMembershipStatus.PermissionDenied, message, null, null);
+
+    public static GroupMembershipResult InvalidRequest(string message) =>
+        new(GroupMembershipStatus.InvalidRequest, message, null, null);
+
+    public static GroupMembershipResult UnexpectedFailure(string message) =>
+        new(GroupMembershipStatus.UnexpectedFailure, message, null, null);
 }
 
 #endregion

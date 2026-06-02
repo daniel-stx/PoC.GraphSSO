@@ -16,6 +16,9 @@ builder.Services.AddOptions<GraphApiOptions>()
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
+builder.Services.AddOptions<SynXisOptions>()
+    .Bind(builder.Configuration.GetSection(SynXisOptions.SectionName));
+
 builder.Services.AddScoped(sp =>
 {
     var options = sp.GetRequiredService<IOptions<GraphApiOptions>>().Value;
@@ -41,6 +44,7 @@ app.UseHttpsRedirection();
 
 var userCreationPoc = app.MapGroup("/poc/user-creation");
 var userPropertiesPoc = app.MapGroup("/poc/user-properties");
+var synXisPoc = app.MapGroup("/poc/synxis");
 
 #endregion
 
@@ -55,7 +59,8 @@ app.MapGet("/", () => Results.Ok(new
             "POST /poc/user-creation/invitations",
             "POST /poc/user-creation/invitations/reinvite",
             "GET /poc/user-properties/users/{userId}",
-            "POST /poc/user-properties/users/{userId}"
+            "POST /poc/user-properties/users/{userId}",
+            "POST /poc/synxis/users/{userId}/enable-sso"
         }
     }))
     .WithName("Home");
@@ -234,6 +239,47 @@ userPropertiesPoc.MapPost("/users/{userId}",
             };
         })
     .WithName("UpdateUserProperties");
+
+#endregion
+
+#region SynXis SSO PoC
+
+synXisPoc.MapPost("/users/{userId}/enable-sso",
+        async (string userId, IOptions<SynXisOptions> synXisOptions, IEmployeeDirectoryService employeeDirectoryService,
+            CancellationToken cancellationToken) =>
+        {
+            var stopwatch = Stopwatch.StartNew();
+            var result = await employeeDirectoryService.AddUserToGroupAsync(
+                synXisOptions.Value.SsoGroupId,
+                userId,
+                cancellationToken);
+            stopwatch.Stop();
+
+            return result.Status switch
+            {
+                GroupMembershipStatus.Success => Results.Ok(new
+                {
+                    status = "Added",
+                    groupId = result.GroupId,
+                    userId = result.UserId,
+                    durationMs = stopwatch.ElapsedMilliseconds
+                }),
+                GroupMembershipStatus.AlreadyMember => Results.Ok(new
+                {
+                    status = "AlreadyMember",
+                    groupId = result.GroupId,
+                    userId = result.UserId,
+                    durationMs = stopwatch.ElapsedMilliseconds
+                }),
+                GroupMembershipStatus.NotFound => Results.NotFound(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
+                GroupMembershipStatus.PermissionDenied => Results.Json(
+                    new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds },
+                    statusCode: StatusCodes.Status403Forbidden),
+                GroupMembershipStatus.InvalidRequest => Results.BadRequest(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
+                _ => Results.Problem(statusCode: StatusCodes.Status502BadGateway, detail: result.Message)
+            };
+        })
+    .WithName("EnableSynXisSso");
 
 #endregion
 

@@ -22,4 +22,10 @@ public interface IEmployeeDirectoryService
         CancellationToken cancellationToken);
 
     #endregion
+
+    #region Group Membership PoC
+
+    Task<GroupMembershipResult> AddUserToGroupAsync(string groupId, string userId, CancellationToken cancellationToken);
+
+    #endregion
 }
