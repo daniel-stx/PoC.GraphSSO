@@ -3,7 +3,7 @@
     "_postman_id": "8e990b10-5228-4f55-8c8a-7d33b847f17c",
     "name": "PoC.GraphSSO Graph PoCs",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Postman collection for the user creation and employeeId update proof-of-concepts."
+    "description": "Postman collection for the user creation and user properties proof-of-concepts."
   },
   "item": [
     {
@@ -21,7 +21,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"displayName\": \"Test User\",\n  \"mailNickname\": \"testuser\",\n  \"userPrincipalName\": \"testuser@memberportalhotelrez.onmicrosoft.com\",\n  \"password\": \"P@ssw0rd12345!\",\n  \"accountEnabled\": true,\n  \"forceChangePasswordNextSignIn\": true,\n  \"employeeId\": \"EMP-12345\"\n}",
+              "raw": "{\n  \"displayName\": \"Test User\",\n  \"mailNickname\": \"testuser\",\n  \"userPrincipalName\": \"testuser@memberportalhotelrez.onmicrosoft.com\",\n  \"password\": \"P@ssw0rd12345!\",\n  \"accountEnabled\": true,\n  \"forceChangePasswordNextSignIn\": true,\n  \"employeeId\": \"EMP-12345\",\n  \"synXisUsername\": \"synxis-user\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -39,7 +39,7 @@
                 "users"
               ]
             },
-            "description": "Creates a tenant-local cloud user and optionally sets employeeId during creation."
+            "description": "Creates a tenant-local cloud user and optionally sets employeeId and SynXisUsername during creation."
           },
           "response": []
         },
@@ -115,32 +115,31 @@
       ]
     },
     {
-      "name": "EmployeeId PoC",
+      "name": "User Properties PoC",
       "item": [
         {
-          "name": "Get employeeId",
+          "name": "Get user properties",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "http://localhost:5150/poc/employee-id/users/eade8792-0001-4450-8324-8837933ba150/employee-id",
+              "raw": "http://localhost:5150/poc/user-properties/users/eade8792-0001-4450-8324-8837933ba150",
               "host": [
                 "http://localhost:5150"
               ],
               "path": [
                 "poc",
-                "employee-id",
+                "user-properties",
                 "users",
-                "eade8792-0001-4450-8324-8837933ba150",
-                "employee-id"
+                "eade8792-0001-4450-8324-8837933ba150"
               ]
             },
-            "description": "Reads the current employeeId for the selected Entra user."
+            "description": "Reads employeeId and SynXisUsername for the selected Entra user."
           },
           "response": []
         },
         {
-          "name": "Update employeeId",
+          "name": "Update user properties",
           "request": {
             "method": "POST",
             "header": [
@@ -151,7 +150,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"employeeId\": \"EMP-12345\"\n}",
+              "raw": "{\n  \"employeeId\": \"EMP-12345\",\n  \"synXisUsername\": \"synxis-user\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -159,19 +158,67 @@
               }
             },
             "url": {
-              "raw": "http://localhost:5150/poc/employee-id/users/eade8792-0001-4450-8324-8837933ba150/employee-id",
+              "raw": "http://localhost:5150/poc/user-properties/users/eade8792-0001-4450-8324-8837933ba150",
               "host": [
                 "http://localhost:5150"
               ],
               "path": [
                 "poc",
-                "employee-id",
+                "user-properties",
                 "users",
-                "eade8792-0001-4450-8324-8837933ba150",
-                "employee-id"
+                "eade8792-0001-4450-8324-8837933ba150"
               ]
             },
-            "description": "Updates the employeeId for the selected Entra user and returns the duration in milliseconds."
+            "description": "Updates employeeId and/or SynXisUsername for the selected Entra user and returns the duration in milliseconds."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "SynXis SSO PoC",
+      "item": [
+        {
+          "name": "Enable SynXis SSO for user",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:5150/poc/synxis/users/eade8792-0001-4450-8324-8837933ba150/enable-sso",
+              "host": [
+                "http://localhost:5150"
+              ],
+              "path": [
+                "poc",
+                "synxis",
+                "users",
+                "eade8792-0001-4450-8324-8837933ba150",
+                "enable-sso"
+              ]
+            },
+            "description": "Adds the selected Entra user object id to the configured SynXis SSO group."
+          },
+          "response": []
+        },
+        {
+          "name": "Disable SynXis SSO for user",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:5150/poc/synxis/users/eade8792-0001-4450-8324-8837933ba150/disable-sso",
+              "host": [
+                "http://localhost:5150"
+              ],
+              "path": [
+                "poc",
+                "synxis",
+                "users",
+                "eade8792-0001-4450-8324-8837933ba150",
+                "disable-sso"
+              ]
+            },
+            "description": "Removes the selected Entra user object id from the configured SynXis SSO group."
           },
           "response": []
         }

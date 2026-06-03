@@ -16,6 +16,9 @@ builder.Services.AddOptions<GraphApiOptions>()
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
+builder.Services.AddOptions<SynXisOptions>()
+    .Bind(builder.Configuration.GetSection(SynXisOptions.SectionName));
+
 builder.Services.AddScoped(sp =>
 {
     var options = sp.GetRequiredService<IOptions<GraphApiOptions>>().Value;
@@ -40,7 +43,8 @@ app.UseHttpsRedirection();
 #region Route Groups
 
 var userCreationPoc = app.MapGroup("/poc/user-creation");
-var employeeIdPoc = app.MapGroup("/poc/employee-id");
+var userPropertiesPoc = app.MapGroup("/poc/user-properties");
+var synXisPoc = app.MapGroup("/poc/synxis");
 
 #endregion
 
@@ -48,14 +52,16 @@ var employeeIdPoc = app.MapGroup("/poc/employee-id");
 
 app.MapGet("/", () => Results.Ok(new
     {
-        Message = "Graph-only PoCs for user creation and employeeId update.",
+        Message = "Graph-only PoCs for user creation and user properties update.",
         Endpoints = new[]
         {
             "POST /poc/user-creation/users",
             "POST /poc/user-creation/invitations",
             "POST /poc/user-creation/invitations/reinvite",
-            "GET /poc/employee-id/users/{userId}/employee-id",
-            "POST /poc/employee-id/users/{userId}/employee-id"
+            "GET /poc/user-properties/users/{userId}",
+            "POST /poc/user-properties/users/{userId}",
+            "POST /poc/synxis/users/{userId}/enable-sso",
+            "POST /poc/synxis/users/{userId}/disable-sso"
         }
     }))
     .WithName("Home");
@@ -77,7 +83,8 @@ userCreationPoc.MapPost("/users",
                     request.Password,
                     request.AccountEnabled,
                     request.ForceChangePasswordNextSignIn,
-                    request.EmployeeId),
+                    request.EmployeeId,
+                    request.SynXisUsername),
                 cancellationToken);
             stopwatch.Stop();
 
@@ -89,6 +96,7 @@ userCreationPoc.MapPost("/users",
                     userPrincipalName = result.UserPrincipalName,
                     displayName = result.DisplayName,
                     employeeId = result.EmployeeId,
+                    synXisUsername = result.SynXisUsername,
                     accountEnabled = result.AccountEnabled,
                     durationMs = stopwatch.ElapsedMilliseconds
                 }),
@@ -175,58 +183,141 @@ userCreationPoc.MapPost("/invitations/reinvite",
 
 #endregion
 
-#region EmployeeId PoC
+#region User Properties PoC
 
-employeeIdPoc.MapGet("/users/{userId}/employee-id",
+userPropertiesPoc.MapGet("/users/{userId}",
         async (string userId, IEmployeeDirectoryService employeeDirectoryService, CancellationToken cancellationToken) =>
         {
             var stopwatch = Stopwatch.StartNew();
-            var result = await employeeDirectoryService.GetEmployeeIdAsync(userId, cancellationToken);
+            var result = await employeeDirectoryService.GetUserPropertiesAsync(userId, cancellationToken);
             stopwatch.Stop();
 
             return result.Status switch
             {
-                EmployeeIdQueryStatus.Success => Results.Ok(new
+                UserPropertiesQueryStatus.Success => Results.Ok(new
                 {
                     userId = result.UserId,
                     userPrincipalName = result.UserPrincipalName,
                     employeeId = result.EmployeeId,
+                    synXisUsername = result.SynXisUsername,
                     durationMs = stopwatch.ElapsedMilliseconds
                 }),
-                EmployeeIdQueryStatus.UserNotFound => Results.NotFound(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
-                EmployeeIdQueryStatus.InvalidRequest => Results.BadRequest(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
+                UserPropertiesQueryStatus.UserNotFound => Results.NotFound(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
+                UserPropertiesQueryStatus.InvalidRequest => Results.BadRequest(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
                 _ => Results.Problem(statusCode: StatusCodes.Status502BadGateway, detail: result.Message)
             };
         })
-    .WithName("GetEmployeeId");
+    .WithName("GetUserProperties");
 
-employeeIdPoc.MapPost("/users/{userId}/employee-id",
-        async (string userId, UpdateEmployeeIdRequest request, IEmployeeDirectoryService employeeDirectoryService,
+userPropertiesPoc.MapPost("/users/{userId}",
+        async (string userId, UpdateUserPropertiesApiRequest request, IEmployeeDirectoryService employeeDirectoryService,
             CancellationToken cancellationToken) =>
         {
             var stopwatch = Stopwatch.StartNew();
-            var result = await employeeDirectoryService.UpdateEmployeeIdAsync(userId, request.EmployeeId, cancellationToken);
+            var result = await employeeDirectoryService.UpdateUserPropertiesAsync(
+                userId,
+                new UserPropertiesUpdateRequest(request.EmployeeId, request.SynXisUsername),
+                cancellationToken);
             stopwatch.Stop();
 
             return result.Status switch
             {
-                EmployeeIdUpdateStatus.Success => Results.Ok(new
+                UserPropertiesUpdateStatus.Success => Results.Ok(new
                 {
                     userId = result.UserId,
                     userPrincipalName = result.UserPrincipalName,
                     employeeId = result.EmployeeId,
+                    synXisUsername = result.SynXisUsername,
                     durationMs = stopwatch.ElapsedMilliseconds
                 }),
-                EmployeeIdUpdateStatus.UserNotFound => Results.NotFound(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
-                EmployeeIdUpdateStatus.CloudManagedRequired => Results.Conflict(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
-                EmployeeIdUpdateStatus.PermissionDenied => Results.Json(
+                UserPropertiesUpdateStatus.UserNotFound => Results.NotFound(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
+                UserPropertiesUpdateStatus.CloudManagedRequired => Results.Conflict(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
+                UserPropertiesUpdateStatus.PermissionDenied => Results.Json(
                     new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds },
                     statusCode: StatusCodes.Status403Forbidden),
-                EmployeeIdUpdateStatus.InvalidRequest => Results.BadRequest(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
+                UserPropertiesUpdateStatus.InvalidRequest => Results.BadRequest(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
                 _ => Results.Problem(statusCode: StatusCodes.Status502BadGateway, detail: result.Message)
             };
         })
-    .WithName("UpdateEmployeeId");
+    .WithName("UpdateUserProperties");
+
+#endregion
+
+#region SynXis SSO PoC
+
+synXisPoc.MapPost("/users/{userId}/enable-sso",
+        async (string userId, IOptions<SynXisOptions> synXisOptions, IEmployeeDirectoryService employeeDirectoryService,
+            CancellationToken cancellationToken) =>
+        {
+            var stopwatch = Stopwatch.StartNew();
+            var result = await employeeDirectoryService.AddUserToGroupAsync(
+                synXisOptions.Value.SsoGroupId,
+                userId,
+                cancellationToken);
+            stopwatch.Stop();
+
+            return result.Status switch
+            {
+                GroupMembershipStatus.Success => Results.Ok(new
+                {
+                    status = "Added",
+                    groupId = result.GroupId,
+                    userId = result.UserId,
+                    durationMs = stopwatch.ElapsedMilliseconds
+                }),
+                GroupMembershipStatus.AlreadyMember => Results.Ok(new
+                {
+                    status = "AlreadyMember",
+                    groupId = result.GroupId,
+                    userId = result.UserId,
+                    durationMs = stopwatch.ElapsedMilliseconds
+                }),
+                GroupMembershipStatus.NotFound => Results.NotFound(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
+                GroupMembershipStatus.PermissionDenied => Results.Json(
+                    new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds },
+                    statusCode: StatusCodes.Status403Forbidden),
+                GroupMembershipStatus.InvalidRequest => Results.BadRequest(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
+                _ => Results.Problem(statusCode: StatusCodes.Status502BadGateway, detail: result.Message)
+            };
+        })
+    .WithName("EnableSynXisSso");
+
+synXisPoc.MapPost("/users/{userId}/disable-sso",
+        async (string userId, IOptions<SynXisOptions> synXisOptions, IEmployeeDirectoryService employeeDirectoryService,
+            CancellationToken cancellationToken) =>
+        {
+            var stopwatch = Stopwatch.StartNew();
+            var result = await employeeDirectoryService.RemoveUserFromGroupAsync(
+                synXisOptions.Value.SsoGroupId,
+                userId,
+                cancellationToken);
+            stopwatch.Stop();
+
+            return result.Status switch
+            {
+                GroupMembershipStatus.Success => Results.Ok(new
+                {
+                    status = "Removed",
+                    groupId = result.GroupId,
+                    userId = result.UserId,
+                    durationMs = stopwatch.ElapsedMilliseconds
+                }),
+                GroupMembershipStatus.NotMember => Results.Ok(new
+                {
+                    status = "NotMember",
+                    groupId = result.GroupId,
+                    userId = result.UserId,
+                    durationMs = stopwatch.ElapsedMilliseconds
+                }),
+                GroupMembershipStatus.NotFound => Results.NotFound(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
+                GroupMembershipStatus.PermissionDenied => Results.Json(
+                    new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds },
+                    statusCode: StatusCodes.Status403Forbidden),
+                GroupMembershipStatus.InvalidRequest => Results.BadRequest(new { error = result.Message, durationMs = stopwatch.ElapsedMilliseconds }),
+                _ => Results.Problem(statusCode: StatusCodes.Status502BadGateway, detail: result.Message)
+            };
+        })
+    .WithName("DisableSynXisSso");
 
 #endregion
 
@@ -239,7 +330,8 @@ internal sealed record CreateUserApiRequest(
     string Password,
     bool AccountEnabled = true,
     bool ForceChangePasswordNextSignIn = true,
-    string? EmployeeId = null);
+    string? EmployeeId = null,
+    string? SynXisUsername = null);
 
 internal sealed record CreateGuestInvitationApiRequest(
     string InvitedUserEmailAddress,
@@ -252,4 +344,4 @@ internal sealed record ReinviteGuestApiRequest(
     string InviteRedirectUrl,
     bool SendInvitationMessage = true);
 
-internal sealed record UpdateEmployeeIdRequest(string EmployeeId);
+internal sealed record UpdateUserPropertiesApiRequest(string? EmployeeId, string? SynXisUsername);

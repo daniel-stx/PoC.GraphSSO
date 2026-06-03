@@ -12,11 +12,22 @@ public interface IEmployeeDirectoryService
 
     #endregion
 
-    #region EmployeeId PoC
+    #region User Properties PoC
 
-    Task<EmployeeIdQueryResult> GetEmployeeIdAsync(string userId, CancellationToken cancellationToken);
+    Task<UserPropertiesQueryResult> GetUserPropertiesAsync(string userId, CancellationToken cancellationToken);
 
-    Task<EmployeeIdUpdateResult> UpdateEmployeeIdAsync(string userId, string employeeId, CancellationToken cancellationToken);
+    Task<UserPropertiesUpdateResult> UpdateUserPropertiesAsync(
+        string userId,
+        UserPropertiesUpdateRequest request,
+        CancellationToken cancellationToken);
+
+    #endregion
+
+    #region Group Membership PoC
+
+    Task<GroupMembershipResult> AddUserToGroupAsync(string groupId, string userId, CancellationToken cancellationToken);
+
+    Task<GroupMembershipResult> RemoveUserFromGroupAsync(string groupId, string userId, CancellationToken cancellationToken);
 
     #endregion
 }

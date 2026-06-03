@@ -8,6 +8,8 @@ public sealed class GraphEmployeeDirectoryService(
     GraphServiceClient graphServiceClient,
     ILogger<GraphEmployeeDirectoryService> logger) : IEmployeeDirectoryService
 {
+    private const string SynXisUsernameExtensionPropertyName = "extension_789456df0b4f43b19bef3d896030cb99_SynXisUsername";
+
     #region User Creation PoC
 
     public async Task<UserCreateResult> CreateUserAsync(CreateUserRequest request, CancellationToken cancellationToken)
@@ -32,8 +34,15 @@ public sealed class GraphEmployeeDirectoryService(
             return UserCreateResult.InvalidRequest("password is required.");
         }
 
+        if (request.SynXisUsername is not null && string.IsNullOrWhiteSpace(request.SynXisUsername))
+        {
+            return UserCreateResult.InvalidRequest("synXisUsername cannot be empty.");
+        }
+
         try
         {
+            var trimmedSynXisUsername = request.SynXisUsername?.Trim();
+
             var createdUser = await graphServiceClient.Users.PostAsync(new User
             {
                 AccountEnabled = request.AccountEnabled,
@@ -41,6 +50,12 @@ public sealed class GraphEmployeeDirectoryService(
                 MailNickname = request.MailNickname.Trim(),
                 UserPrincipalName = request.UserPrincipalName.Trim(),
                 EmployeeId = string.IsNullOrWhiteSpace(request.EmployeeId) ? null : request.EmployeeId.Trim(),
+                AdditionalData = trimmedSynXisUsername is null
+                    ? null
+                    : new Dictionary<string, object>
+                    {
+                        [SynXisUsernameExtensionPropertyName] = trimmedSynXisUsername
+                    },
                 PasswordProfile = new PasswordProfile
                 {
                     Password = request.Password,
@@ -60,6 +75,7 @@ public sealed class GraphEmployeeDirectoryService(
                 createdUser.UserPrincipalName,
                 createdUser.DisplayName,
                 createdUser.EmployeeId,
+                trimmedSynXisUsername,
                 createdUser.AccountEnabled);
         }
         catch (ApiException exception) when (exception.ResponseStatusCode == 400)
@@ -225,13 +241,13 @@ public sealed class GraphEmployeeDirectoryService(
 
     #endregion
 
-    #region EmployeeId PoC
+    #region User Properties PoC
 
-    public async Task<EmployeeIdQueryResult> GetEmployeeIdAsync(string userId, CancellationToken cancellationToken)
+    public async Task<UserPropertiesQueryResult> GetUserPropertiesAsync(string userId, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(userId))
         {
-            return EmployeeIdQueryResult.InvalidRequest("A target user id or user principal name is required.");
+            return UserPropertiesQueryResult.InvalidRequest("A target user id or user principal name is required.");
         }
 
         var trimmedUserId = userId.Trim();
@@ -239,47 +255,61 @@ public sealed class GraphEmployeeDirectoryService(
         try
         {
             var user = await GetUserAsync(trimmedUserId, cancellationToken);
-
             if (user is null)
             {
-                return EmployeeIdQueryResult.UserNotFound($"User '{trimmedUserId}' was not found.");
+                return UserPropertiesQueryResult.UserNotFound($"User '{trimmedUserId}' was not found.");
             }
 
-            return EmployeeIdQueryResult.Success(user.Id ?? trimmedUserId, user.UserPrincipalName, user.EmployeeId);
+            return UserPropertiesQueryResult.Success(
+                user.Id ?? trimmedUserId,
+                user.UserPrincipalName,
+                user.EmployeeId,
+                GetSynXisUsername(user));
         }
         catch (ApiException exception) when (exception.ResponseStatusCode == 404)
         {
-            return EmployeeIdQueryResult.UserNotFound($"User '{trimmedUserId}' was not found.");
+            return UserPropertiesQueryResult.UserNotFound($"User '{trimmedUserId}' was not found.");
         }
         catch (ApiException exception) when (exception.ResponseStatusCode == 400)
         {
-            logger.LogWarning(exception, "Microsoft Graph rejected employeeId lookup for user {UserId}.", trimmedUserId);
-            return EmployeeIdQueryResult.InvalidRequest("Microsoft Graph rejected the employeeId lookup request.");
+            logger.LogWarning(exception, "Microsoft Graph rejected user properties lookup for user {UserId}.", trimmedUserId);
+            return UserPropertiesQueryResult.InvalidRequest("Microsoft Graph rejected the user properties lookup request.");
         }
         catch (ApiException exception)
         {
-            logger.LogError(exception, "Unexpected Microsoft Graph error while reading employeeId for user {UserId}.", trimmedUserId);
-            return EmployeeIdQueryResult.UnexpectedFailure("Microsoft Graph returned an unexpected error while reading employeeId.");
+            logger.LogError(exception, "Unexpected Microsoft Graph error while reading user properties for user {UserId}.", trimmedUserId);
+            return UserPropertiesQueryResult.UnexpectedFailure("Microsoft Graph returned an unexpected error while reading user properties.");
         }
     }
 
-    public async Task<EmployeeIdUpdateResult> UpdateEmployeeIdAsync(
+    public async Task<UserPropertiesUpdateResult> UpdateUserPropertiesAsync(
         string userId,
-        string employeeId,
+        UserPropertiesUpdateRequest request,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(userId))
         {
-            return EmployeeIdUpdateResult.InvalidRequest("A target user id or user principal name is required.");
+            return UserPropertiesUpdateResult.InvalidRequest("A target user id or user principal name is required.");
         }
 
-        if (string.IsNullOrWhiteSpace(employeeId))
+        if (request.EmployeeId is not null && string.IsNullOrWhiteSpace(request.EmployeeId))
         {
-            return EmployeeIdUpdateResult.InvalidRequest("employeeId is required.");
+            return UserPropertiesUpdateResult.InvalidRequest("employeeId cannot be empty.");
+        }
+
+        if (request.SynXisUsername is not null && string.IsNullOrWhiteSpace(request.SynXisUsername))
+        {
+            return UserPropertiesUpdateResult.InvalidRequest("synXisUsername cannot be empty.");
+        }
+
+        if (request.EmployeeId is null && request.SynXisUsername is null)
+        {
+            return UserPropertiesUpdateResult.InvalidRequest("At least one user property is required.");
         }
 
         var trimmedUserId = userId.Trim();
-        var trimmedEmployeeId = employeeId.Trim();
+        var trimmedEmployeeId = request.EmployeeId?.Trim();
+        var trimmedSynXisUsername = request.SynXisUsername?.Trim();
 
         try
         {
@@ -287,45 +317,61 @@ public sealed class GraphEmployeeDirectoryService(
 
             if (user is null)
             {
-                return EmployeeIdUpdateResult.UserNotFound($"User '{trimmedUserId}' was not found.");
+                return UserPropertiesUpdateResult.UserNotFound($"User '{trimmedUserId}' was not found.");
             }
 
-            if (user.OnPremisesSyncEnabled == true)
+            if (trimmedEmployeeId is not null && user.OnPremisesSyncEnabled == true)
             {
-                return EmployeeIdUpdateResult.CloudManagedRequired(
+                return UserPropertiesUpdateResult.CloudManagedRequired(
                     $"User '{user.UserPrincipalName ?? user.Id ?? trimmedUserId}' is synchronized from on-premises, so employeeId must be managed at the source of authority.");
             }
 
-            await graphServiceClient.Users[trimmedUserId].PatchAsync(new User
+            var update = new User();
+
+            if (trimmedEmployeeId is not null)
             {
-                EmployeeId = trimmedEmployeeId
-            }, cancellationToken: cancellationToken);
+                update.EmployeeId = trimmedEmployeeId;
+            }
 
-            logger.LogInformation("Updated employeeId for user {UserId}.", user.Id ?? trimmedUserId);
+            if (trimmedSynXisUsername is not null)
+            {
+                update.AdditionalData = new Dictionary<string, object>
+                {
+                    [SynXisUsernameExtensionPropertyName] = trimmedSynXisUsername
+                };
+            }
 
-            return EmployeeIdUpdateResult.Success(user.Id ?? trimmedUserId, user.UserPrincipalName, trimmedEmployeeId);
+            await graphServiceClient.Users[trimmedUserId].PatchAsync(update, cancellationToken: cancellationToken);
+
+            logger.LogInformation("Updated user properties for user {UserId}.", user.Id ?? trimmedUserId);
+
+            return UserPropertiesUpdateResult.Success(
+                user.Id ?? trimmedUserId,
+                user.UserPrincipalName,
+                trimmedEmployeeId ?? user.EmployeeId,
+                trimmedSynXisUsername ?? GetSynXisUsername(user));
         }
         catch (ApiException exception) when (exception.ResponseStatusCode == 404)
         {
-            return EmployeeIdUpdateResult.UserNotFound($"User '{trimmedUserId}' was not found.");
+            return UserPropertiesUpdateResult.UserNotFound($"User '{trimmedUserId}' was not found.");
         }
         catch (ApiException exception) when (exception.ResponseStatusCode == 403)
         {
-            logger.LogWarning(exception, "Microsoft Graph denied employeeId update for user {UserId}.", trimmedUserId);
-            return EmployeeIdUpdateResult.PermissionDenied(
-                "Microsoft Graph denied the employeeId update. Verify admin consent and User.ReadWrite.All application permission.");
+            logger.LogWarning(exception, "Microsoft Graph denied user properties update for user {UserId}.", trimmedUserId);
+            return UserPropertiesUpdateResult.PermissionDenied(
+                "Microsoft Graph denied the user properties update. Verify admin consent and User.ReadWrite.All application permission.");
         }
         catch (ApiException exception) when (exception.ResponseStatusCode == 400)
         {
-            logger.LogWarning(exception, "Microsoft Graph rejected employeeId update for user {UserId}.", trimmedUserId);
-            return EmployeeIdUpdateResult.InvalidRequest(
-                "Microsoft Graph rejected the employeeId update. Verify that the property is writable for this user and that the value is valid.");
+            logger.LogWarning(exception, "Microsoft Graph rejected user properties update for user {UserId}.", trimmedUserId);
+            return UserPropertiesUpdateResult.InvalidRequest(
+                "Microsoft Graph rejected the user properties update. Verify that the properties are writable for this user and that the values are valid.");
         }
         catch (ApiException exception)
         {
-            logger.LogError(exception, "Unexpected Microsoft Graph error while updating employeeId for user {UserId}.", trimmedUserId);
-            return EmployeeIdUpdateResult.UnexpectedFailure(
-                "Microsoft Graph returned an unexpected error while updating employeeId.");
+            logger.LogError(exception, "Unexpected Microsoft Graph error while updating user properties for user {UserId}.", trimmedUserId);
+            return UserPropertiesUpdateResult.UnexpectedFailure(
+                "Microsoft Graph returned an unexpected error while updating user properties.");
         }
     }
 
@@ -337,9 +383,137 @@ public sealed class GraphEmployeeDirectoryService(
                 "id",
                 "userPrincipalName",
                 "employeeId",
-                "onPremisesSyncEnabled"
+                "onPremisesSyncEnabled",
+                SynXisUsernameExtensionPropertyName
             ];
         }, cancellationToken);
+
+    private static string? GetSynXisUsername(User user) =>
+        user.AdditionalData?.TryGetValue(SynXisUsernameExtensionPropertyName, out var value) == true
+            ? value?.ToString()
+            : null;
+
+    #endregion
+
+    #region Group Membership PoC
+
+    public async Task<GroupMembershipResult> AddUserToGroupAsync(
+        string groupId,
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(groupId))
+        {
+            return GroupMembershipResult.InvalidRequest("SynXis SSO group id is not configured.");
+        }
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return GroupMembershipResult.InvalidRequest("A target user object id is required.");
+        }
+
+        var trimmedGroupId = groupId.Trim();
+        var trimmedUserId = userId.Trim();
+
+        try
+        {
+            await graphServiceClient.Groups[trimmedGroupId].Members.Ref.PostAsync(new ReferenceCreate
+            {
+                OdataId = $"https://graph.microsoft.com/v1.0/directoryObjects/{trimmedUserId}"
+            }, cancellationToken: cancellationToken);
+
+            logger.LogInformation("Added user {UserId} to group {GroupId}.", trimmedUserId, trimmedGroupId);
+
+            return GroupMembershipResult.Success(trimmedGroupId, trimmedUserId);
+        }
+        catch (ApiException exception) when (exception.ResponseStatusCode == 400 && IsAlreadyMemberError(exception))
+        {
+            logger.LogInformation("User {UserId} is already a member of group {GroupId}.", trimmedUserId, trimmedGroupId);
+            return GroupMembershipResult.AlreadyMember(trimmedGroupId, trimmedUserId);
+        }
+        catch (ApiException exception) when (exception.ResponseStatusCode == 400)
+        {
+            logger.LogWarning(exception, "Microsoft Graph rejected group membership request for user {UserId} and group {GroupId}.", trimmedUserId, trimmedGroupId);
+            return GroupMembershipResult.InvalidRequest(
+                "Microsoft Graph rejected the group membership request. Verify that groupId and userId are valid object ids.");
+        }
+        catch (ApiException exception) when (exception.ResponseStatusCode == 403)
+        {
+            logger.LogWarning(exception, "Microsoft Graph denied group membership request for user {UserId} and group {GroupId}.", trimmedUserId, trimmedGroupId);
+            return GroupMembershipResult.PermissionDenied(
+                "Microsoft Graph denied the group membership request. Verify admin consent and GroupMember.ReadWrite.All application permission.");
+        }
+        catch (ApiException exception) when (exception.ResponseStatusCode == 404)
+        {
+            logger.LogWarning(exception, "Microsoft Graph could not find user {UserId} or group {GroupId}.", trimmedUserId, trimmedGroupId);
+            return GroupMembershipResult.NotFound("Microsoft Graph could not find the target user or SynXis SSO group.");
+        }
+        catch (ApiException exception)
+        {
+            logger.LogError(exception, "Unexpected Microsoft Graph error while adding user {UserId} to group {GroupId}.", trimmedUserId, trimmedGroupId);
+            return GroupMembershipResult.UnexpectedFailure("Microsoft Graph returned an unexpected error while adding the user to the group.");
+        }
+    }
+
+    public async Task<GroupMembershipResult> RemoveUserFromGroupAsync(
+        string groupId,
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(groupId))
+        {
+            return GroupMembershipResult.InvalidRequest("SynXis SSO group id is not configured.");
+        }
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return GroupMembershipResult.InvalidRequest("A target user object id is required.");
+        }
+
+        var trimmedGroupId = groupId.Trim();
+        var trimmedUserId = userId.Trim();
+
+        try
+        {
+            await graphServiceClient.Groups[trimmedGroupId].Members[trimmedUserId].Ref.DeleteAsync(
+                cancellationToken: cancellationToken);
+
+            logger.LogInformation("Removed user {UserId} from group {GroupId}.", trimmedUserId, trimmedGroupId);
+
+            return GroupMembershipResult.Success(trimmedGroupId, trimmedUserId);
+        }
+        catch (ApiException exception) when (exception.ResponseStatusCode == 404)
+        {
+            logger.LogInformation(
+                exception,
+                "User {UserId} was not a member of group {GroupId}, or the membership reference was not found.",
+                trimmedUserId,
+                trimmedGroupId);
+
+            return GroupMembershipResult.NotMember(trimmedGroupId, trimmedUserId);
+        }
+        catch (ApiException exception) when (exception.ResponseStatusCode == 400)
+        {
+            logger.LogWarning(exception, "Microsoft Graph rejected group membership removal for user {UserId} and group {GroupId}.", trimmedUserId, trimmedGroupId);
+            return GroupMembershipResult.InvalidRequest(
+                "Microsoft Graph rejected the group membership removal. Verify that groupId and userId are valid object ids.");
+        }
+        catch (ApiException exception) when (exception.ResponseStatusCode == 403)
+        {
+            logger.LogWarning(exception, "Microsoft Graph denied group membership removal for user {UserId} and group {GroupId}.", trimmedUserId, trimmedGroupId);
+            return GroupMembershipResult.PermissionDenied(
+                "Microsoft Graph denied the group membership removal. Verify admin consent and GroupMember.ReadWrite.All application permission.");
+        }
+        catch (ApiException exception)
+        {
+            logger.LogError(exception, "Unexpected Microsoft Graph error while removing user {UserId} from group {GroupId}.", trimmedUserId, trimmedGroupId);
+            return GroupMembershipResult.UnexpectedFailure("Microsoft Graph returned an unexpected error while removing the user from the group.");
+        }
+    }
+
+    private static bool IsAlreadyMemberError(ApiException exception) =>
+        exception.Message.Contains("already exist", StringComparison.OrdinalIgnoreCase)
+        || exception.Message.Contains("already a member", StringComparison.OrdinalIgnoreCase);
 
     #endregion
 }
@@ -353,7 +527,8 @@ public sealed record CreateUserRequest(
     string Password,
     bool AccountEnabled = true,
     bool ForceChangePasswordNextSignIn = true,
-    string? EmployeeId = null);
+    string? EmployeeId = null,
+    string? SynXisUsername = null);
 
 public sealed record GuestInvitationRequest(
     string InvitedUserEmailAddress,
@@ -382,6 +557,7 @@ public sealed record UserCreateResult(
     string? UserPrincipalName,
     string? DisplayName,
     string? EmployeeId,
+    string? SynXisUsername,
     bool? AccountEnabled)
 {
     public static UserCreateResult Success(
@@ -389,20 +565,21 @@ public sealed record UserCreateResult(
         string? userPrincipalName,
         string? displayName,
         string? employeeId,
+        string? synXisUsername,
         bool? accountEnabled) =>
-        new(UserCreateStatus.Success, string.Empty, userId, userPrincipalName, displayName, employeeId, accountEnabled);
+        new(UserCreateStatus.Success, string.Empty, userId, userPrincipalName, displayName, employeeId, synXisUsername, accountEnabled);
 
     public static UserCreateResult PermissionDenied(string message) =>
-        new(UserCreateStatus.PermissionDenied, message, null, null, null, null, null);
+        new(UserCreateStatus.PermissionDenied, message, null, null, null, null, null, null);
 
     public static UserCreateResult InvalidRequest(string message) =>
-        new(UserCreateStatus.InvalidRequest, message, null, null, null, null, null);
+        new(UserCreateStatus.InvalidRequest, message, null, null, null, null, null, null);
 
     public static UserCreateResult Conflict(string message) =>
-        new(UserCreateStatus.Conflict, message, null, null, null, null, null);
+        new(UserCreateStatus.Conflict, message, null, null, null, null, null, null);
 
     public static UserCreateResult UnexpectedFailure(string message) =>
-        new(UserCreateStatus.UnexpectedFailure, message, null, null, null, null, null);
+        new(UserCreateStatus.UnexpectedFailure, message, null, null, null, null, null, null);
 }
 
 public enum GuestInvitationStatus
@@ -456,9 +633,11 @@ public sealed record GuestInvitationResult(
 
 #endregion
 
-#region EmployeeId PoC Models
+#region User Properties PoC Models
 
-public enum EmployeeIdQueryStatus
+public sealed record UserPropertiesUpdateRequest(string? EmployeeId, string? SynXisUsername);
+
+public enum UserPropertiesQueryStatus
 {
     Success,
     UserNotFound,
@@ -466,27 +645,32 @@ public enum EmployeeIdQueryStatus
     UnexpectedFailure
 }
 
-public sealed record EmployeeIdQueryResult(
-    EmployeeIdQueryStatus Status,
+public sealed record UserPropertiesQueryResult(
+    UserPropertiesQueryStatus Status,
     string Message,
     string? UserId,
     string? UserPrincipalName,
-    string? EmployeeId)
+    string? EmployeeId,
+    string? SynXisUsername)
 {
-    public static EmployeeIdQueryResult Success(string userId, string? userPrincipalName, string? employeeId) =>
-        new(EmployeeIdQueryStatus.Success, string.Empty, userId, userPrincipalName, employeeId);
+    public static UserPropertiesQueryResult Success(
+        string userId,
+        string? userPrincipalName,
+        string? employeeId,
+        string? synXisUsername) =>
+        new(UserPropertiesQueryStatus.Success, string.Empty, userId, userPrincipalName, employeeId, synXisUsername);
 
-    public static EmployeeIdQueryResult UserNotFound(string message) =>
-        new(EmployeeIdQueryStatus.UserNotFound, message, null, null, null);
+    public static UserPropertiesQueryResult UserNotFound(string message) =>
+        new(UserPropertiesQueryStatus.UserNotFound, message, null, null, null, null);
 
-    public static EmployeeIdQueryResult InvalidRequest(string message) =>
-        new(EmployeeIdQueryStatus.InvalidRequest, message, null, null, null);
+    public static UserPropertiesQueryResult InvalidRequest(string message) =>
+        new(UserPropertiesQueryStatus.InvalidRequest, message, null, null, null, null);
 
-    public static EmployeeIdQueryResult UnexpectedFailure(string message) =>
-        new(EmployeeIdQueryStatus.UnexpectedFailure, message, null, null, null);
+    public static UserPropertiesQueryResult UnexpectedFailure(string message) =>
+        new(UserPropertiesQueryStatus.UnexpectedFailure, message, null, null, null, null);
 }
 
-public enum EmployeeIdUpdateStatus
+public enum UserPropertiesUpdateStatus
 {
     Success,
     UserNotFound,
@@ -496,30 +680,78 @@ public enum EmployeeIdUpdateStatus
     UnexpectedFailure
 }
 
-public sealed record EmployeeIdUpdateResult(
-    EmployeeIdUpdateStatus Status,
+public sealed record UserPropertiesUpdateResult(
+    UserPropertiesUpdateStatus Status,
     string Message,
     string? UserId,
     string? UserPrincipalName,
-    string? EmployeeId)
+    string? EmployeeId,
+    string? SynXisUsername)
 {
-    public static EmployeeIdUpdateResult Success(string userId, string? userPrincipalName, string? employeeId) =>
-        new(EmployeeIdUpdateStatus.Success, string.Empty, userId, userPrincipalName, employeeId);
+    public static UserPropertiesUpdateResult Success(
+        string userId,
+        string? userPrincipalName,
+        string? employeeId,
+        string? synXisUsername) =>
+        new(UserPropertiesUpdateStatus.Success, string.Empty, userId, userPrincipalName, employeeId, synXisUsername);
 
-    public static EmployeeIdUpdateResult UserNotFound(string message) =>
-        new(EmployeeIdUpdateStatus.UserNotFound, message, null, null, null);
+    public static UserPropertiesUpdateResult UserNotFound(string message) =>
+        new(UserPropertiesUpdateStatus.UserNotFound, message, null, null, null, null);
 
-    public static EmployeeIdUpdateResult CloudManagedRequired(string message) =>
-        new(EmployeeIdUpdateStatus.CloudManagedRequired, message, null, null, null);
+    public static UserPropertiesUpdateResult CloudManagedRequired(string message) =>
+        new(UserPropertiesUpdateStatus.CloudManagedRequired, message, null, null, null, null);
 
-    public static EmployeeIdUpdateResult PermissionDenied(string message) =>
-        new(EmployeeIdUpdateStatus.PermissionDenied, message, null, null, null);
+    public static UserPropertiesUpdateResult PermissionDenied(string message) =>
+        new(UserPropertiesUpdateStatus.PermissionDenied, message, null, null, null, null);
 
-    public static EmployeeIdUpdateResult InvalidRequest(string message) =>
-        new(EmployeeIdUpdateStatus.InvalidRequest, message, null, null, null);
+    public static UserPropertiesUpdateResult InvalidRequest(string message) =>
+        new(UserPropertiesUpdateStatus.InvalidRequest, message, null, null, null, null);
 
-    public static EmployeeIdUpdateResult UnexpectedFailure(string message) =>
-        new(EmployeeIdUpdateStatus.UnexpectedFailure, message, null, null, null);
+    public static UserPropertiesUpdateResult UnexpectedFailure(string message) =>
+        new(UserPropertiesUpdateStatus.UnexpectedFailure, message, null, null, null, null);
+}
+
+#endregion
+
+#region Group Membership PoC Models
+
+public enum GroupMembershipStatus
+{
+    Success,
+    AlreadyMember,
+    NotMember,
+    NotFound,
+    PermissionDenied,
+    InvalidRequest,
+    UnexpectedFailure
+}
+
+public sealed record GroupMembershipResult(
+    GroupMembershipStatus Status,
+    string Message,
+    string? GroupId,
+    string? UserId)
+{
+    public static GroupMembershipResult Success(string groupId, string userId) =>
+        new(GroupMembershipStatus.Success, string.Empty, groupId, userId);
+
+    public static GroupMembershipResult AlreadyMember(string groupId, string userId) =>
+        new(GroupMembershipStatus.AlreadyMember, string.Empty, groupId, userId);
+
+    public static GroupMembershipResult NotMember(string groupId, string userId) =>
+        new(GroupMembershipStatus.NotMember, string.Empty, groupId, userId);
+
+    public static GroupMembershipResult NotFound(string message) =>
+        new(GroupMembershipStatus.NotFound, message, null, null);
+
+    public static GroupMembershipResult PermissionDenied(string message) =>
+        new(GroupMembershipStatus.PermissionDenied, message, null, null);
+
+    public static GroupMembershipResult InvalidRequest(string message) =>
+        new(GroupMembershipStatus.InvalidRequest, message, null, null);
+
+    public static GroupMembershipResult UnexpectedFailure(string message) =>
+        new(GroupMembershipStatus.UnexpectedFailure, message, null, null);
 }
 
 #endregion
